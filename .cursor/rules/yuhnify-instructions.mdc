@@ -1,0 +1,180 @@
+---
+alwaysApply: true
+---
+
+# cursor instructions for yuhnify
+
+## how to work with me
+
+You are building yuhnify — a production-grade AI fitness coaching app.
+Full spec is in `YUHNIFY_SPEC.md`. Read it before every session.
+Current file structure is documented in the spec under section 2.
+
+---
+
+## stack (read carefully)
+
+| what | choice | notes |
+|---|---|---|
+| framework | Next.js 16, App Router | already installed |
+| auth | Better Auth 1.x | NOT NextAuth — Auth.js is deprecated for new projects as of Sept 2025 |
+| database | Neon Postgres + Prisma | not set up yet — phase 1 |
+| AI | Anthropic Claude API | SDK already installed |
+| music correlation | FastAPI + Python | separate repo, separate deployment — do NOT build in this repo |
+| middleware file | proxy.ts | Next.js 16 renamed middleware.ts → proxy.ts |
+
+---
+
+## language boundaries — strictly enforced
+
+- **TypeScript** — all Next.js app logic, API routes, components, database queries
+- **Python** — music correlation microservice ONLY (separate repo: yuhnify-music-service)
+- **No Java** — do not suggest Java for any part of this codebase
+- **No mixing** — do not write correlation logic in TypeScript, do not write API routes in Python
+
+When the music microservice needs to be called from Next.js, use this pattern:
+```typescript
+const res = await fetch(process.env.MUSIC_SERVICE_URL + "/correlate", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ runs, scrobbles }),
+})
+```
+
+---
+
+## rules — non-negotiable
+
+1. Never write `any` in TypeScript. Ever.
+2. Every API route checks auth before any logic. No exceptions.
+3. Every database query filters by `userId` — users never see each other's data.
+4. Every async operation has try/catch with this error shape:
+   ```typescript
+   return NextResponse.json(
+     { error: string, code: string, retryAfter?: number },
+     { status: number }
+   )
+   ```
+5. Every new `src/lib/` function gets a unit test in `tests/unit/`.
+6. Validate every API route body with Zod.
+7. Use the Prisma singleton pattern — never instantiate `new PrismaClient()` outside `src/lib/prisma.ts`.
+8. Run `npm run build` after completing each phase checklist. Fix all errors before moving on.
+9. Mobile first — design every component for 390px before desktop.
+
+---
+
+## how to start each session
+
+Tell me:
+1. Which phase we're on (1–5)
+2. Which checklist item we're working on
+3. Paste relevant existing code if editing a file
+
+Then ask clarifying questions before writing any code.
+
+After implementing each item:
+- Run the verification step listed in the checklist
+- Mark the item complete in YUHNIFY_SPEC.md
+- Document any design decisions not in the spec in a file called `DECISIONS.md`
+
+---
+
+## current state (as of project start)
+
+**Done:**
+- Next.js 16 project created
+- TypeScript + Tailwind configured
+- Anthropic SDK installed
+- NextAuth v5 installed (will be replaced with Better Auth in phase 1)
+- `src/app/api/auth/[...nextauth]/route.ts` — Strava OAuth, token refresh
+- `src/app/page.tsx` — landing page
+- `src/lib/strava.ts` — fetchStravaActivities, processActivities, buildRunSummaryForAI
+- `src/types/index.ts` — StravaActivity, ProcessedRun, PlannedRun, TrainingPlan types
+
+**Not done:**
+- Dashboard page
+- Claude coaching API route
+- Database (Neon + Prisma)
+- Everything in phases 2–5
+
+---
+
+## current phase
+
+**PHASE 1 — core coaching**
+
+Next task: replace NextAuth with Better Auth, then set up Neon + Prisma.
+Work through the phase 1 checklist in YUHNIFY_SPEC.md in order.
+
+---
+
+## the four vibe-coding traps — we avoid all of these
+
+### 1. secrets in the repo
+- NEVER create a `.env` file. Only `.env.local` (already gitignored).
+- NEVER hardcode any key, token, or secret in any source file.
+- If a value is needed client-side, it MUST start with `NEXT_PUBLIC_` and MUST NOT be secret.
+- Before every commit, run: `git diff --staged | grep -iE "sk-|secret|password|token|key"` and verify nothing sensitive is staged.
+- If Cursor suggests creating a `.env` file, refuse and use `.env.local` instead.
+
+### 2. users reading each other's data
+Every Prisma query that reads or writes user data MUST be scoped to the authenticated user.
+Never query by `id` alone. Always include `userId`.
+
+WRONG:
+```typescript
+prisma.run.findUnique({ where: { id: runId } })
+prisma.trainingPlan.findMany()
+```
+
+RIGHT:
+```typescript
+prisma.run.findUnique({ where: { id: runId, userId: session.user.id } })
+prisma.trainingPlan.findMany({ where: { userId: session.user.id } })
+```
+
+This applies to every model: Run, TrainingPlan, HealthData, Route, RouteLike, RouteSave.
+If you are writing a query without `userId: session.user.id`, stop and add it.
+
+### 3. no rate limiting
+Every route in `src/app/api/` MUST call the rate limiter as the first thing after auth.
+Build `src/lib/rate-limit.ts` in phase 1 before building any other API routes.
+No exceptions — including routes you think are "safe" or low-traffic.
+
+Template every API route starts with:
+```typescript
+export async function POST(req: NextRequest) {
+  // 1. Auth check
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: "Unauthorized", code: "NOT_AUTHENTICATED" }, { status: 401 })
+
+  // 2. Rate limit check
+  const limit = await rateLimit(session.user.id, "route-name")
+  if (!limit.success) return NextResponse.json({ error: "Too many requests", code: "RATE_LIMITED", retryAfter: limit.retryAfter }, { status: 429 })
+
+  // 3. actual logic
+}
+```
+
+### 4. no error handling past the happy path
+Every call to Strava API, Anthropic API, Prisma, or the music microservice MUST be in try/catch.
+Never let an external failure reach the user as an unhandled exception.
+Always return the standard error shape — never a raw thrown error.
+
+WRONG:
+```typescript
+const activities = await fetchStravaActivities(token) // crashes if Strava is down
+const plan = await anthropic.messages.create(...)     // crashes if API times out
+```
+
+RIGHT:
+```typescript
+try {
+  const activities = await fetchStravaActivities(token)
+} catch (error) {
+  console.error("Strava fetch failed:", error)
+  return NextResponse.json({ error: "Could not fetch Strava data", code: "STRAVA_ERROR" }, { status: 502 })
+}
+```
+
+Silent failures are not acceptable. If something breaks, the user sees a clear message and the error is logged to Sentry.
