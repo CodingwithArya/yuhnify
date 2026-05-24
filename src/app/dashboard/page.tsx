@@ -2,9 +2,8 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { DashboardTopBar } from "@/components/DashboardTopBar";
-import { StatCards } from "@/components/StatCards";
-import { CoachNudgeCard } from "@/components/CoachNudgeCard";
-import { RecentRunsList } from "@/components/RecentRunsList";
+import { DashboardContent } from "@/components/DashboardContent";
+import { UnitsGuard } from "@/components/UnitsGuard";
 import { computeWeeklyStats } from "@/lib/dashboard-stats";
 import {
   fetchStravaActivities,
@@ -42,22 +41,16 @@ export default async function DashboardPage() {
 
   return (
     <AppShell userEmail={userEmail}>
-      <DashboardTopBar userName={userName} />
-      <main className="px-4 py-5 md:px-6 space-y-5 max-w-3xl">
-        {fetchFailed ? (
-          <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6 text-center">
-            <p className="text-[#71717a] text-sm">
-              Could not load your runs. Try refreshing.
-            </p>
-          </div>
-        ) : (
-          <>
-            <StatCards stats={weeklyStats} />
-            <CoachNudgeCard />
-            <RecentRunsList runs={runs} />
-          </>
-        )}
-      </main>
+      <UnitsGuard userId={session.user?.id ?? session.user?.email ?? "athlete"}>
+        <DashboardTopBar userName={userName} />
+        <main className="px-4 py-5 md:px-6 space-y-5 max-w-3xl">
+          <DashboardContent
+            fetchFailed={fetchFailed}
+            weeklyStats={weeklyStats}
+            runs={runs}
+          />
+        </main>
+      </UnitsGuard>
     </AppShell>
   );
 }

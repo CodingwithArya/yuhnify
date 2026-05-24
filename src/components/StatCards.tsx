@@ -1,20 +1,32 @@
+"use client";
+
 import type { WeeklyStats } from "@/lib/dashboard-stats";
+import type { Units } from "@/lib/units";
+import { formatPaceForUnits } from "@/lib/units";
 
 interface StatCardsProps {
   stats: WeeklyStats;
+  units: Units;
 }
 
-export function StatCards({ stats }: StatCardsProps) {
+export function StatCards({ stats, units }: StatCardsProps) {
+  const distanceLabel = units === "mi" ? "Total mi this week" : "Total km this week";
+  const distanceValue =
+    units === "mi"
+      ? `${Math.round(stats.totalKm * 0.621371 * 10) / 10} mi`
+      : `${stats.totalKm} km`;
+
+  const paceValue =
+    stats.avgPacePerKm === "--"
+      ? "--"
+      : formatPaceForUnits(`${stats.avgPacePerKm}/km`, units);
+
   return (
     <div className="grid grid-cols-2 gap-3">
-      <StatCard label="Total km this week" value={`${stats.totalKm} km`} />
+      <StatCard label={distanceLabel} value={distanceValue} />
       <StatCard
         label="Avg pace this week"
-        value={
-          stats.avgPacePerKm === "--"
-            ? "--"
-            : `${stats.avgPacePerKm} /km`
-        }
+        value={paceValue === "--" ? "--" : paceValue}
       />
       <StatCard label="Runs this week" value={String(stats.runCount)} />
       <StatCard

@@ -43,7 +43,7 @@ export const authConfig: NextAuthConfig = {
   trustHost: true,
   session: { strategy: "jwt" },
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account, user }) {
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
@@ -51,12 +51,18 @@ export const authConfig: NextAuthConfig = {
           ? account.expires_at * 1000
           : 0;
       }
+      if (user?.id) {
+        token.sub = String(user.id);
+      }
       if (Date.now() < (token.accessTokenExpires as number)) {
         return token;
       }
       return refreshAccessToken(token);
     },
     async session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.sub ?? "";
+      }
       session.accessToken = token.accessToken as string;
       session.error = token.error as string | undefined;
       return session;

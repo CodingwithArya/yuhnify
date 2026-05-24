@@ -27,12 +27,28 @@ export interface ProcessedRun {
   maxHeartrate?: number;
 }
 
+export interface ResearchSource {
+  label: string;
+  url: string;
+  summary: string;
+}
+
+export interface PlanApproach {
+  name: string;
+  reasoning: string;
+  primarySource: ResearchSource;
+  injurySource: ResearchSource;
+  additionalSources: ResearchSource[];
+}
+
 export interface PlannedRun {
   day: string;
   type: "easy" | "tempo" | "intervals" | "long" | "recovery" | "rest";
   distanceKm: number;
   description: string;
-  targetPace?: string;
+  targetPace?: string | null;
+  heartRateZone?: string | null;
+  notes?: string;
 }
 
 export interface TrainingPlan {
@@ -42,6 +58,10 @@ export interface TrainingPlan {
   runs: PlannedRun[];
   generalAdvice: string;
   realisticGoalTime: string;
+  warningFlags?: string[];
+  planApproach?: PlanApproach;
+  trainingPhase?: "base" | "build" | "peak" | "taper";
+  weeksToRace?: number;
 }
 
 declare module "next-auth" {
