@@ -1,8 +1,23 @@
+import type { PainLevel, PainLocation } from "@/types/profile";
+import { checkInToInjuryNotes } from "@/lib/injury-intelligence";
+
 export interface StoredCheckIn {
   feeling: string;
   completed: string;
   notes?: string;
+  painLevel?: PainLevel;
+  painLocations?: PainLocation[];
 }
+
+const PLAN_DAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
 
 function storageKey(userId: string, planId: string, day: string): string {
   return `yuhnify-checkin-${userId}-${planId}-${day.toLowerCase()}`;
@@ -35,4 +50,23 @@ export function saveCheckInLocal(
   } catch {
     // ignore
   }
+}
+
+export function collectCheckInNotesForPlan(
+  userId: string,
+  planId: string
+): string[] {
+  const notes: string[] = [];
+  for (const day of PLAN_DAYS) {
+    const checkIn = loadCheckIn(userId, planId, day);
+    if (!checkIn) continue;
+    notes.push(
+      ...checkInToInjuryNotes(
+        checkIn.notes,
+        checkIn.painLevel,
+        checkIn.painLocations
+      )
+    );
+  }
+  return notes;
 }

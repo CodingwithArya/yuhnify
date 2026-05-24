@@ -11,6 +11,8 @@ import {
   writeProfileToStorage,
 } from "@/lib/user-profile-storage";
 import { ProfileFields } from "@/components/profile/ProfileFields";
+import { InjuryAutocomplete } from "@/components/profile/InjuryAutocomplete";
+import { HealthConditionsFields } from "@/components/profile/HealthConditionsFields";
 
 interface OnboardingFlowProps {
   userId: string;
@@ -67,12 +69,12 @@ export function OnboardingFlow({
   }
 
   function handleStep1Continue() {
+    if (!profile.firstName.trim()) return;
     patchProfile({ units });
     setStep(2);
   }
 
   function handleStep2Continue() {
-    if (!profile.firstName.trim()) return;
     setStep(3);
   }
 
@@ -85,6 +87,14 @@ export function OnboardingFlow({
   }
 
   function handleStep3Skip() {
+    setStep(4);
+  }
+
+  function handleNoneOfTheseApply() {
+    patchProfile({
+      currentInjuries: undefined,
+      healthConditions: undefined,
+    });
     setStep(4);
   }
 
@@ -108,10 +118,10 @@ export function OnboardingFlow({
   }
 
   const stepTitles: Record<OnboardingStep, string> = {
-    1: "Which units do you prefer?",
-    2: "Tell us about yourself",
-    3: "Your running background",
-    4: "What is your main goal right now?",
+    1: "About you",
+    2: "Running background",
+    3: "Health and injuries",
+    4: "Your goal",
   };
 
   return (
@@ -130,31 +140,45 @@ export function OnboardingFlow({
         </div>
 
         {step === 1 && (
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
+          <div className="space-y-5">
+            <ProfileFields
+              profile={{ ...profile, units }}
+              onChange={patchProfile}
               disabled={saving}
-              onClick={() => setUnits("mi")}
-              className={`py-4 rounded-xl border bg-[#09090b] text-white transition-colors disabled:opacity-50 ${
-                units === "mi"
-                  ? "border-[#f97316]"
-                  : "border-[#27272a] hover:border-[#27272a]/80"
-              }`}
-            >
-              Miles
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => setUnits("km")}
-              className={`py-4 rounded-xl border bg-[#09090b] text-white transition-colors disabled:opacity-50 ${
-                units === "km"
-                  ? "border-[#f97316]"
-                  : "border-[#27272a] hover:border-[#27272a]/80"
-              }`}
-            >
-              Kilometers
-            </button>
+              variant="basic"
+            />
+
+            <div>
+              <p className="block text-sm text-[#71717a] mb-2">
+                Which units do you prefer?
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => setUnits("mi")}
+                  className={`py-3 rounded-full text-sm font-medium transition-colors disabled:opacity-50 ${
+                    units === "mi"
+                      ? "bg-[#f97316] text-white"
+                      : "bg-zinc-800 text-white"
+                  }`}
+                >
+                  Miles
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => setUnits("km")}
+                  className={`py-3 rounded-full text-sm font-medium transition-colors disabled:opacity-50 ${
+                    units === "km"
+                      ? "bg-[#f97316] text-white"
+                      : "bg-zinc-800 text-white"
+                  }`}
+                >
+                  Kilometers
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -163,17 +187,53 @@ export function OnboardingFlow({
             profile={{ ...profile, units }}
             onChange={patchProfile}
             disabled={saving}
-            variant="basic"
+            variant="background"
           />
         )}
 
         {step === 3 && (
-          <ProfileFields
-            profile={{ ...profile, units }}
-            onChange={patchProfile}
-            disabled={saving}
-            variant="background"
-          />
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-sm font-medium text-white">
+                Any current injuries or physical limitations?
+              </h2>
+              <p className="text-xs text-[#71717a] mt-1">
+                Your coach will avoid aggravating these
+              </p>
+              <div className="mt-3">
+                <InjuryAutocomplete
+                  value={profile.currentInjuries ?? []}
+                  onChange={(currentInjuries) =>
+                    patchProfile({
+                      currentInjuries:
+                        currentInjuries.length > 0 ? currentInjuries : undefined,
+                    })
+                  }
+                  disabled={saving}
+                  showHelperText={false}
+                />
+              </div>
+            </div>
+
+            <HealthConditionsFields
+              value={profile.healthConditions}
+              onChange={(healthConditions) =>
+                patchProfile({ healthConditions })
+              }
+              disabled={saving}
+              label="Any health conditions we should know about?"
+              subtext="Helps your coach adjust training safely"
+            />
+
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleNoneOfTheseApply}
+              className="w-full py-2.5 rounded-xl border border-[#27272a] text-sm text-[#71717a] hover:text-white transition-colors disabled:opacity-50"
+            >
+              None of these apply
+            </button>
+          </div>
         )}
 
         {step === 4 && (
@@ -214,7 +274,7 @@ export function OnboardingFlow({
           {step === 1 && (
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || !profile.firstName.trim()}
               onClick={handleStep1Continue}
               className="flex-1 py-3 rounded-xl bg-[#f97316] text-white font-semibold hover:bg-orange-400 transition-colors disabled:opacity-50"
             >
@@ -234,7 +294,7 @@ export function OnboardingFlow({
               </button>
               <button
                 type="button"
-                disabled={saving || !profile.firstName.trim()}
+                disabled={saving}
                 onClick={handleStep2Continue}
                 className="flex-1 py-3 rounded-xl bg-[#f97316] text-white font-semibold hover:bg-orange-400 transition-colors disabled:opacity-50"
               >

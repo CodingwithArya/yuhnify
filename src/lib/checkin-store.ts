@@ -6,6 +6,8 @@ export interface CheckIn {
   feeling: string;
   completed: string;
   notes?: string;
+  painLevel?: "none" | "mild" | "moderate" | "severe";
+  painLocations?: string[];
   planWeek: string;
   createdAt: string;
 }

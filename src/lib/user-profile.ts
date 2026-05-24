@@ -1,11 +1,14 @@
 import type { Units } from "@/lib/units";
 import type {
   BiologicalSex,
+  HealthCondition,
+  PerinatalStatus,
   PreviousRace,
   RunningExperience,
   UserProfile,
   WeeklyMileage,
 } from "@/types/profile";
+import { CURATED_INJURY_IDS } from "@/lib/injury-options";
 
 export function sanitizePrimaryGoal(
   input: string | undefined
@@ -42,6 +45,36 @@ const VALID_EXPERIENCE = new Set<RunningExperience>([
   "5_plus_years",
 ]);
 const VALID_PREVIOUS_RACE = new Set<PreviousRace>(["yes", "no"]);
+const VALID_PERINATAL = new Set<PerinatalStatus>([
+  "pregnant",
+  "postpartum",
+  "postpartum_under_6",
+  "postpartum_6_12",
+  "no",
+]);
+const VALID_HEALTH = new Set<HealthCondition>([
+  "diabetes",
+  "type_1_diabetes",
+  "type_2_diabetes",
+  "high_blood_pressure",
+  "asthma",
+  "heart_condition",
+  "osteoporosis",
+  "autoimmune",
+  "anemia",
+  "thyroid_condition",
+  "pcos",
+  "previous_stress_fracture",
+  "chronic_pain",
+  "mental_health",
+  "none",
+  "prefer_not_to_say",
+]);
+
+function sanitizeInjuryEntry(input: string): string | undefined {
+  const cleaned = input.trim().replace(/<[^>]*>/g, "").slice(0, 150);
+  return cleaned || undefined;
+}
 
 export function normalizeProfilePatch(
   patch: Partial<UserProfile> & { displayName?: string }
@@ -80,6 +113,28 @@ export function normalizeProfilePatch(
   if (patch.primaryGoal !== undefined) {
     normalized.primaryGoal = sanitizePrimaryGoal(patch.primaryGoal);
   }
+  if (patch.perinatalStatus && VALID_PERINATAL.has(patch.perinatalStatus)) {
+    normalized.perinatalStatus = patch.perinatalStatus;
+  }
+  if (Array.isArray(patch.healthConditions)) {
+    normalized.healthConditions = patch.healthConditions.filter((c) =>
+      VALID_HEALTH.has(c)
+    );
+  }
+  if (Array.isArray(patch.currentInjuries)) {
+    const seen = new Set<string>();
+    const normalizedInjuries: string[] = [];
+    for (const entry of patch.currentInjuries) {
+      if (typeof entry !== "string") continue;
+      const cleaned = sanitizeInjuryEntry(entry);
+      if (!cleaned || seen.has(cleaned)) continue;
+      if (!CURATED_INJURY_IDS.has(cleaned) && cleaned.length < 2) continue;
+      seen.add(cleaned);
+      normalizedInjuries.push(cleaned);
+    }
+    normalized.currentInjuries =
+      normalizedInjuries.length > 0 ? normalizedInjuries : undefined;
+  }
 
   return normalized;
 }
@@ -98,6 +153,9 @@ export function resolveCoachProfile(
     runningExperience: normalized.runningExperience,
     previousRace: normalized.previousRace,
     primaryGoal: normalized.primaryGoal,
+    perinatalStatus: normalized.perinatalStatus,
+    healthConditions: normalized.healthConditions,
+    currentInjuries: normalized.currentInjuries,
   };
 }
 

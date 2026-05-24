@@ -40,6 +40,8 @@ export interface TrainingZonesResult {
   comfortablePacePerKm: string;
   comfortablePacePerMi: string;
   easyPace: string;
+  longRunPace: string;
+  recoveryPace: string;
   tempoPace: string;
   intervalPace: string;
   qualifyingRunCount: number;
@@ -55,6 +57,8 @@ function emptyResult(note: string): TrainingZonesResult {
     comfortablePacePerKm: "--",
     comfortablePacePerMi: "--",
     easyPace: "--",
+    longRunPace: "--",
+    recoveryPace: "--",
     tempoPace: "--",
     intervalPace: "--",
     qualifyingRunCount: 0,
@@ -139,6 +143,35 @@ export function paceFromComfortableSecs(
   return formatPaceWithUnit(comfortableSecsPerKm * multiplier, units);
 }
 
+function easySecsPerKmFromComfortable(comfortableSecsPerKm: number): number {
+  return comfortableSecsPerKm * 1.1;
+}
+
+function longRunPaceFromEasySecs(easySecsPerKm: number, units: Units): string {
+  if (units === "mi") {
+    const longSecsPerKm = (easySecsPerKm * 1.60934 + 45) / 1.60934;
+    return formatPaceWithUnit(longSecsPerKm, units);
+  }
+  return formatPaceWithUnit(easySecsPerKm + 28, units);
+}
+
+function recoveryPaceFromEasySecs(easySecsPerKm: number, units: Units): string {
+  if (units === "mi") {
+    const recoverySecsPerKm = (easySecsPerKm * 1.60934 + 75) / 1.60934;
+    return formatPaceWithUnit(recoverySecsPerKm, units);
+  }
+  const recoveryAddKm = 75 / 1.60934;
+  return formatPaceWithUnit(easySecsPerKm + recoveryAddKm, units);
+}
+
+function pacesFromEasySecsPerKm(easySecsPerKm: number, units: Units) {
+  return {
+    easyPace: formatPaceWithUnit(easySecsPerKm, units),
+    longRunPace: longRunPaceFromEasySecs(easySecsPerKm, units),
+    recoveryPace: recoveryPaceFromEasySecs(easySecsPerKm, units),
+  };
+}
+
 function filterQualifyingRuns(runs: ProcessedRun[]): ProcessedRun[] {
   return runs.filter((run) => {
     if (run.distanceKm < MIN_DISTANCE_KM) return false;
@@ -198,13 +231,17 @@ function buildZonesFromComfortable(
 ): TrainingZonesResult {
   const comfortablePacePerKm = `${formatPaceFromSeconds(comfortableSecsPerKm)}/km`;
   const comfortablePacePerMi = `${formatPaceFromSeconds(comfortableSecsPerKm * 1.60934)}/mi`;
+  const easySecsPerKm = easySecsPerKmFromComfortable(comfortableSecsPerKm);
+  const paces = pacesFromEasySecsPerKm(easySecsPerKm, units);
 
   return {
     confident: true,
     noRaceResult: opts.noRaceResult,
     comfortablePacePerKm,
     comfortablePacePerMi,
-    easyPace: paceFromComfortableSecs(comfortableSecsPerKm, 1.1, units),
+    easyPace: paces.easyPace,
+    longRunPace: paces.longRunPace,
+    recoveryPace: paces.recoveryPace,
     tempoPace: paceFromComfortableSecs(comfortableSecsPerKm, 0.92, units),
     intervalPace: paceFromComfortableSecs(comfortableSecsPerKm, 0.85, units),
     qualifyingRunCount: opts.qualifyingRunCount,
@@ -249,6 +286,11 @@ function buildZonesFromVdot(
 ): TrainingZonesResult {
   const easySecsPerKm =
     1000 / (velocityFromVdotPercent(vdot, 0.7) / 60) || 0;
+  const paces = easySecsPerKm > 0 ? pacesFromEasySecsPerKm(easySecsPerKm, units) : {
+    easyPace: "--",
+    longRunPace: "--",
+    recoveryPace: "--",
+  };
   const comfortablePacePerKm =
     easySecsPerKm > 0
       ? `${formatPaceFromSeconds(easySecsPerKm / 1.1)}/km`
@@ -263,7 +305,9 @@ function buildZonesFromVdot(
     noRaceResult: false,
     comfortablePacePerKm,
     comfortablePacePerMi,
-    easyPace: paceFromVdotPercent(vdot, 0.7, units),
+    easyPace: paces.easyPace,
+    longRunPace: paces.longRunPace,
+    recoveryPace: paces.recoveryPace,
     tempoPace: paceFromVdotPercent(vdot, 0.88, units),
     intervalPace: paceFromVdotPercent(vdot, 0.95, units),
     qualifyingRunCount: 0,
@@ -380,9 +424,13 @@ export function formatTrainingZonesSummary(
   const comfortable =
     units === "mi" ? result.comfortablePacePerMi : result.comfortablePacePerKm;
   const unitLabel = units === "mi" ? "miles" : "kilometers";
+  const unitWord = units === "mi" ? "mile" : "km";
+  const offset = units === "mi" ? "45 sec/mi" : "28 sec/km";
   const lines: string[] = [
     `Comfortable training pace: ${comfortable}`,
     `Easy / Zone 2: ${result.easyPace}`,
+    `Long run pace: ${result.longRunPace} per ${unitWord} (${offset} slower than easy). Time on feet, not pace.`,
+    `Recovery run pace: ${result.recoveryPace}`,
     `Tempo / Threshold: ${result.tempoPace}`,
     `Interval: ${result.intervalPace}`,
   ];

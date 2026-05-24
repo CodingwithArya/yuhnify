@@ -9,6 +9,7 @@ import {
 import { evaluateCheckInAdjustments } from "@/lib/anthropic";
 import { getUserSettings } from "@/lib/user-settings-store";
 import type { Units } from "@/lib/units";
+import type { PainLevel, PainLocation } from "@/types/profile";
 import type { TrainingPlan } from "@/types";
 
 interface CheckInBody {
@@ -18,6 +19,8 @@ interface CheckInBody {
   feeling?: string;
   completed?: string;
   notes?: string;
+  painLevel?: PainLevel;
+  painLocations?: PainLocation[];
   planWeek?: string;
   currentPlan?: TrainingPlan;
   units?: Units;
@@ -53,6 +56,23 @@ function checkRateLimit(userId: string): boolean {
 
 const VALID_FEELINGS = ["Very hard", "Hard", "Ok", "Easy", "Very easy"];
 const VALID_COMPLETED = ["Yes", "Partial", "No"];
+const VALID_PAIN_LEVELS = new Set<PainLevel>([
+  "none",
+  "mild",
+  "moderate",
+  "severe",
+]);
+const VALID_PAIN_LOCATIONS = new Set<PainLocation>([
+  "knee",
+  "shin",
+  "calf_achilles",
+  "heel_arch",
+  "hip",
+  "hamstring",
+  "ankle",
+  "lower_back",
+  "other",
+]);
 
 export async function POST(request: Request) {
   try {
@@ -105,6 +125,26 @@ export async function POST(request: Request) {
       );
     }
 
+    const painLevel: PainLevel = body.painLevel ?? "none";
+    if (!VALID_PAIN_LEVELS.has(painLevel)) {
+      return NextResponse.json(
+        { error: "Invalid pain level", code: "INVALID_INPUT" },
+        { status: 400 }
+      );
+    }
+
+    const painLocations =
+      painLevel !== "none" && Array.isArray(body.painLocations)
+        ? body.painLocations.filter((loc) => VALID_PAIN_LOCATIONS.has(loc))
+        : undefined;
+
+    if (painLevel !== "none" && (!painLocations || painLocations.length === 0)) {
+      return NextResponse.json(
+        { error: "Pain location required when pain is reported", code: "INVALID_INPUT" },
+        { status: 400 }
+      );
+    }
+
     const checkin: CheckIn = {
       id: crypto.randomUUID(),
       day: body.day,
@@ -113,6 +153,8 @@ export async function POST(request: Request) {
       feeling: body.feeling,
       completed: body.completed,
       notes: body.notes,
+      painLevel,
+      painLocations,
       planWeek: body.planWeek ?? "unknown",
       createdAt: new Date().toISOString(),
     };

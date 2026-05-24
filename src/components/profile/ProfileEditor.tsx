@@ -10,6 +10,7 @@ import {
   writeProfileToStorage,
 } from "@/lib/user-profile-storage";
 import { ProfileFields } from "./ProfileFields";
+import { InjuryAutocomplete } from "./InjuryAutocomplete";
 
 interface ProfileEditorProps {
   userId: string;
@@ -108,8 +109,24 @@ export function ProfileEditor({
           )}
         </div>
 
-        <div onBlur={handleBlurSave}>
+        <div onBlur={handleBlurSave} className="space-y-5">
           <ProfileFields profile={profile} onChange={handleChange} />
+
+          <div className="border-t border-[#27272a] pt-4">
+            <h2 className="text-sm font-medium text-white mb-3">
+              Current injuries or physical limitations
+            </h2>
+            <InjuryAutocomplete
+              value={profile.currentInjuries ?? []}
+              onChange={(currentInjuries) =>
+                handleChange({
+                  currentInjuries:
+                    currentInjuries.length > 0 ? currentInjuries : undefined,
+                })
+              }
+              disabled={saving}
+            />
+          </div>
         </div>
 
         <button

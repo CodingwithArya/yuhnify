@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { PlannedRun } from "@/types";
+import type { PainLevel, PainLocation } from "@/types/profile";
 import {
   loadCheckIn,
   saveCheckInLocal,
@@ -22,12 +23,31 @@ interface CheckInModalProps {
     feeling: string;
     completed: string;
     notes?: string;
+    painLevel: PainLevel;
+    painLocations?: PainLocation[];
     planWeek: string;
   }) => void;
 }
 
 const FEELINGS = ["Very hard", "Hard", "Ok", "Easy", "Very easy"];
 const COMPLETED = ["Yes", "Partial", "No"];
+const PAIN_LEVELS: { value: PainLevel; label: string }[] = [
+  { value: "none", label: "None" },
+  { value: "mild", label: "Mild - did not affect run" },
+  { value: "moderate", label: "Moderate - affected my pace or distance" },
+  { value: "severe", label: "Severe - had to cut it short" },
+];
+const PAIN_LOCATIONS: { value: PainLocation; label: string }[] = [
+  { value: "knee", label: "Knee" },
+  { value: "shin", label: "Shin" },
+  { value: "calf_achilles", label: "Calf or Achilles" },
+  { value: "heel_arch", label: "Heel or arch" },
+  { value: "hip", label: "Hip" },
+  { value: "hamstring", label: "Hamstring" },
+  { value: "ankle", label: "Ankle" },
+  { value: "lower_back", label: "Lower back" },
+  { value: "other", label: "Other" },
+];
 
 export function CheckInModal({
   run,
@@ -41,6 +61,8 @@ export function CheckInModal({
   const [feeling, setFeeling] = useState("");
   const [completed, setCompleted] = useState("");
   const [notes, setNotes] = useState("");
+  const [painLevel, setPainLevel] = useState<PainLevel>("none");
+  const [painLocations, setPainLocations] = useState<PainLocation[]>([]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -50,18 +72,38 @@ export function CheckInModal({
       setFeeling(existing.feeling);
       setCompleted(existing.completed);
       setNotes(existing.notes ?? "");
+      setPainLevel(existing.painLevel ?? "none");
+      setPainLocations(existing.painLocations ?? []);
     } else {
       setFeeling("");
       setCompleted("");
       setNotes("");
+      setPainLevel("none");
+      setPainLocations([]);
     }
   }, [isOpen, userId, planId, run.day]);
 
   if (!isOpen) return null;
 
+  function togglePainLocation(location: PainLocation) {
+    setPainLocations((prev) =>
+      prev.includes(location)
+        ? prev.filter((l) => l !== location)
+        : [...prev, location]
+    );
+  }
+
+  function handlePainLevelChange(level: PainLevel) {
+    setPainLevel(level);
+    if (level === "none") {
+      setPainLocations([]);
+    }
+  }
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!feeling || !completed) return;
+    if (painLevel !== "none" && painLocations.length === 0) return;
 
     const payload = {
       day: run.day,
@@ -70,6 +112,11 @@ export function CheckInModal({
       feeling,
       completed,
       notes: notes.trim() || undefined,
+      painLevel,
+      painLocations:
+        painLevel !== "none" && painLocations.length > 0
+          ? painLocations
+          : undefined,
       planWeek,
     };
 
@@ -77,6 +124,11 @@ export function CheckInModal({
       feeling,
       completed,
       notes: notes.trim() || undefined,
+      painLevel,
+      painLocations:
+        painLevel !== "none" && painLocations.length > 0
+          ? painLocations
+          : undefined,
     };
 
     try {
@@ -89,11 +141,13 @@ export function CheckInModal({
     onSave(payload);
   }
 
+  const showPainLocations = painLevel !== "none";
+
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4 bg-black/60">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md bg-[#18181b] border border-[#27272a] rounded-xl p-5 space-y-4"
+        className="w-full max-w-md bg-[#18181b] border border-[#27272a] rounded-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-white font-semibold text-sm">Log {run.day}</h2>
@@ -121,6 +175,48 @@ export function CheckInModal({
             ))}
           </div>
         </div>
+
+        <div>
+          <p className="text-xs text-[#71717a] mb-2">Any pain or discomfort?</p>
+          <div className="flex flex-col gap-2">
+            {PAIN_LEVELS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => handlePainLevelChange(option.value)}
+                className={`text-xs px-3 py-2 rounded-lg border text-left ${
+                  painLevel === option.value
+                    ? "border-[#f97316] text-[#f97316]"
+                    : "border-[#27272a] text-[#71717a]"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {showPainLocations && (
+          <div>
+            <p className="text-xs text-[#71717a] mb-2">Where?</p>
+            <div className="flex flex-wrap gap-2">
+              {PAIN_LOCATIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => togglePainLocation(option.value)}
+                  className={`text-xs px-2.5 py-1 rounded-full border ${
+                    painLocations.includes(option.value)
+                      ? "border-[#f97316] text-[#f97316]"
+                      : "border-[#27272a] text-[#71717a]"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div>
           <p className="text-xs text-[#71717a] mb-2">Did you complete it?</p>
@@ -159,7 +255,11 @@ export function CheckInModal({
 
         <button
           type="submit"
-          disabled={!feeling || !completed}
+          disabled={
+            !feeling ||
+            !completed ||
+            (painLevel !== "none" && painLocations.length === 0)
+          }
           className="w-full py-2.5 rounded-lg bg-[#f97316] text-white text-sm font-medium disabled:opacity-50"
         >
           Save

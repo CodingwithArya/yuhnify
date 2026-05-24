@@ -23,6 +23,9 @@ function profileResponse(
     runningExperience: profile.runningExperience,
     previousRace: profile.previousRace,
     primaryGoal: profile.primaryGoal,
+    perinatalStatus: profile.perinatalStatus,
+    healthConditions: profile.healthConditions,
+    currentInjuries: profile.currentInjuries,
   };
 }
 

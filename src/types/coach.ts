@@ -17,6 +17,9 @@ export interface CoachProfilePayload {
   previousRace?: UserProfile["previousRace"];
   primaryGoal?: string;
   units?: UserProfile["units"];
+  perinatalStatus?: UserProfile["perinatalStatus"];
+  healthConditions?: UserProfile["healthConditions"];
+  currentInjuries?: string[];
 }
 
 export interface CoachFormValues {
@@ -38,10 +41,13 @@ export interface CoachGenerateRequest extends CoachFormValues {
   previousPlan?: TrainingPlan;
 }
 
+import type { InjuryAlert } from "@/lib/injury-intelligence";
+
 export interface CoachApiResponse {
   plan: TrainingPlan;
   generatedAt: string;
   generationsRemaining: number | "unlimited";
+  injuryAlerts?: InjuryAlert[];
 }
 
 export interface CheckInPayload {
@@ -51,6 +57,8 @@ export interface CheckInPayload {
   feeling: string;
   completed: string;
   notes?: string;
+  painLevel?: "none" | "mild" | "moderate" | "severe";
+  painLocations?: string[];
   planWeek: string;
 }
 

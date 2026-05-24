@@ -58,6 +58,8 @@ interface TrainingPlanDisplayProps {
     feeling: string;
     completed: string;
     notes?: string;
+    painLevel: "none" | "mild" | "moderate" | "severe";
+    painLocations?: string[];
     planWeek: string;
   }) => void;
   adjustmentBanner: boolean;

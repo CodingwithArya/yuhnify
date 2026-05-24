@@ -18,7 +18,14 @@ import {
 } from "@/lib/training-zones";
 import type { Units } from "@/lib/units";
 import type { CoachProfilePayload } from "@/types/coach";
-import type { TrainingPlan } from "@/types";
+import {
+  detectInjuries,
+  buildInjuryPromptSection,
+  profileInjuryNotes,
+  checkInToInjuryNotes,
+} from "@/lib/injury-intelligence";
+import { getCheckIns } from "@/lib/checkin-store";
+import type { ProcessedRun, TrainingPlan } from "@/types";
 
 interface CoachRequestBody {
   raceDate?: string;
@@ -34,6 +41,7 @@ interface CoachRequestBody {
   recentRaceTime?: string;
   recentRaceDate?: string;
   profile?: CoachProfilePayload;
+  checkInNotes?: string[];
 }
 
 interface RateLimitEntry {
@@ -97,6 +105,8 @@ export async function POST(request: Request) {
       currentWeeklyMileage: profile.currentWeeklyMileage,
       previousRace: profile.previousRace,
       primaryGoal: profile.primaryGoal,
+      perinatalStatus: profile.perinatalStatus,
+      healthConditions: profile.healthConditions,
       units: profile.units,
     });
 
@@ -116,11 +126,12 @@ export async function POST(request: Request) {
 
     let runSummary = "No recent runs found.";
     let zonesSummary: string | undefined;
+    let recentRuns: ProcessedRun[] = [];
     try {
       const activities = await fetchStravaActivities(session.accessToken, 20, 0);
-      const runs = processActivities(activities);
-      runSummary = buildRunSummaryForAI(runs, units);
-      const zones = computeTrainingZones(runs, units, {
+      recentRuns = processActivities(activities);
+      runSummary = buildRunSummaryForAI(recentRuns, units);
+      const zones = computeTrainingZones(recentRuns, units, {
         recentRaceDistance:
           body.recentRaceDistance && body.recentRaceDistance !== "other"
             ? body.recentRaceDistance
@@ -143,6 +154,34 @@ export async function POST(request: Request) {
       recentRaceTime: body.recentRaceTime,
     });
 
+    const injuryNotes: string[] = [
+      ...profileInjuryNotes(profile),
+      ...(body.additionalNotes ? [body.additionalNotes] : []),
+      ...recentRuns.map((run) => run.name).filter(Boolean),
+      ...(body.checkInNotes ?? []),
+    ];
+
+    for (const checkIn of getCheckIns(session.user.id)) {
+      injuryNotes.push(
+        ...checkInToInjuryNotes(
+          checkIn.notes,
+          checkIn.painLevel,
+          checkIn.painLocations
+        )
+      );
+    }
+
+    let injuryAlerts: ReturnType<typeof detectInjuries> = [];
+    let injuryPromptSection = "";
+    try {
+      injuryAlerts = detectInjuries(injuryNotes, profile);
+      if (injuryAlerts.length > 0) {
+        injuryPromptSection = buildInjuryPromptSection(injuryAlerts);
+      }
+    } catch (error) {
+      console.warn("Injury intelligence failed:", error);
+    }
+
     const userPrompt = buildCoachUserPrompt({
       runSummary,
       zonesSummary,
@@ -159,19 +198,22 @@ export async function POST(request: Request) {
       units,
       athleteProfile: profile,
       recentRacePrompt,
+      injuryPromptSection: injuryPromptSection || undefined,
     });
 
     const plan = await generateTrainingPlan(
       userPrompt,
       units,
       weeksUntilRace,
-      trainingPhase
+      trainingPhase,
+      profile
     );
 
     return NextResponse.json({
       plan,
       generatedAt: new Date().toISOString(),
       generationsRemaining: "unlimited" as const,
+      injuryAlerts,
     });
   } catch (error) {
     console.error("Coach plan generation failed:", error);

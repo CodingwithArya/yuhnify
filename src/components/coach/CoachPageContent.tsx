@@ -12,6 +12,9 @@ import {
 } from "@/lib/plan-undo-store";
 import { useUnits } from "@/components/UnitsGuard";
 import { readProfileFromStorage } from "@/lib/user-profile-storage";
+import { collectCheckInNotesForPlan } from "@/lib/checkin-local";
+import type { InjuryAlert } from "@/lib/injury-intelligence";
+import { ActiveInjuryAlerts } from "./ActiveInjuryAlerts";
 import { GoalForm, getStoredGoalValues } from "./GoalForm";
 import { TrainingPlanDisplay } from "./TrainingPlanDisplay";
 
@@ -40,6 +43,7 @@ export function CoachPageContent({ userId, runs }: CoachPageContentProps) {
   const [showChanges, setShowChanges] = useState(false);
   const [adjustmentBanner, setAdjustmentBanner] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
+  const [injuryAlerts, setInjuryAlerts] = useState<InjuryAlert[]>([]);
   const planWeek = getCurrentPlanWeek();
 
   useEffect(() => {
@@ -82,6 +86,9 @@ export function CoachPageContent({ userId, runs }: CoachPageContentProps) {
     setSubtitle(computeWeekSubtitle(values.raceDate));
 
     const storedProfile = readProfileFromStorage(userId);
+    const checkInNotes = generatedAt
+      ? collectCheckInNotesForPlan(userId, generatedAt)
+      : [];
 
     try {
       const response = await fetch("/api/coach", {
@@ -100,6 +107,7 @@ export function CoachPageContent({ userId, runs }: CoachPageContentProps) {
           feedback: extras?.feedback,
           previousPlan: extras?.previousPlan,
           units: storedProfile.units ?? units,
+          checkInNotes,
           profile: {
             age: storedProfile.age,
             biologicalSex: storedProfile.biologicalSex,
@@ -108,6 +116,9 @@ export function CoachPageContent({ userId, runs }: CoachPageContentProps) {
             previousRace: storedProfile.previousRace,
             primaryGoal: storedProfile.primaryGoal,
             units: storedProfile.units ?? units,
+            perinatalStatus: storedProfile.perinatalStatus,
+            healthConditions: storedProfile.healthConditions,
+            currentInjuries: storedProfile.currentInjuries,
           },
         }),
       });
@@ -117,9 +128,11 @@ export function CoachPageContent({ userId, runs }: CoachPageContentProps) {
       const data = (await response.json()) as {
         plan: TrainingPlan;
         generatedAt: string;
+        injuryAlerts?: InjuryAlert[];
       };
 
       persistPlan(data.plan, data.generatedAt);
+      setInjuryAlerts(data.injuryAlerts ?? []);
       setChangedDays([]);
       setShowChanges(false);
       clearPreviousPlan(userId);
@@ -144,6 +157,8 @@ export function CoachPageContent({ userId, runs }: CoachPageContentProps) {
     feeling: string;
     completed: string;
     notes?: string;
+    painLevel: "none" | "mild" | "moderate" | "severe";
+    painLocations?: string[];
     planWeek: string;
   }) {
     void (async () => {
@@ -219,6 +234,8 @@ export function CoachPageContent({ userId, runs }: CoachPageContentProps) {
           </p>
         </div>
       )}
+
+      <ActiveInjuryAlerts userId={userId} alerts={injuryAlerts} />
 
       <div className="md:grid md:grid-cols-2 md:gap-6 md:items-start space-y-5 md:space-y-0">
         <GoalForm

@@ -5,154 +5,110 @@ import type { Units } from "@/lib/units";
 import type { UserProfile } from "@/types/profile";
 import { buildAthleteProfilePrompt } from "@/lib/user-profile";
 import {
+  buildProfileConditionalPrompt,
+  CROSS_TRAINING_RULES,
+  MENTAL_HEALTH_RULES,
+  PACE_RULES,
+  PROGRESSIVE_OVERLOAD_RULES,
+  VOLUME_INTENSITY_RULES,
+  WARNING_FLAGS_RULES,
+  WEEKLY_STRUCTURE_RULES,
+} from "@/lib/coaching-prompt-sections";
+import {
   computeTrainingPhase,
   type TrainingPhase,
 } from "@/lib/training-zones";
 
 export const RESEARCH_SOURCES = {
-  "80/20": {
+  "80_20": {
     label: "Seiler & Kjerland, Scand J Med Sci Sports, 2006",
     url: "https://pubmed.ncbi.nlm.nih.gov/16430681/",
     summary:
-      "Elite athletes naturally train at 80% low intensity. Recreational runners who copy this improve 5% more than 50/50 training groups.",
+      "Elite endurance athletes naturally train at 80% low intensity. Recreational runners copying this improve 5% more than 50/50 groups.",
   },
   polarized: {
     label: "Stoggl & Sperlich, Front Physiol, 2014",
     url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3912323/",
     summary:
-      "Polarized training produced the greatest VO2max increase (11.7%) compared to threshold, HIIT, and high-volume approaches.",
+      "Polarized training produced the greatest VO2max gain at 11.7% compared to threshold, HIIT, and high-volume approaches.",
   },
-  polarized_recreational: {
-    label: "Munoz, Seiler et al., Int J Sports Physiol Perform, 2014",
-    url: "https://pubmed.ncbi.nlm.nih.gov/23752040/",
-    summary:
-      "Polarized training improved performance in recreational runners compared to threshold-focused plans.",
-  },
-  threshold: {
-    label: "Esteve-Lanao et al., Med Sci Sports Exerc, 2007",
-    url: "https://pubmed.ncbi.nlm.nih.gov/17468580/",
-    summary:
-      "Shows how endurance runners actually train and relates intensity distribution to race performance.",
-  },
-  lactate_threshold: {
-    label: "Lactate Threshold Training Review, ResearchGate, 2024",
-    url: "https://www.researchgate.net/publication/378261635",
-    summary:
-      "Improved lactate clearance and metabolic efficiency from threshold training leads to longer time to exhaustion and better race performance.",
-  },
-  machine_learning_plans: {
-    label: "Reis et al., Scientific Reports, 2025",
-    url: "https://www.nature.com/articles/s41598-025-25369-7",
-    summary:
-      "Machine learning analysis of 120 marathon runners found polarized training produced 30% greater improvements, but individual response varies significantly.",
-  },
-  injury_single_run: {
-    label: "Frandsen et al., Br J Sports Med, 2025",
-    url: "https://bjsm.bmj.com/content/59/17/1203",
-    summary:
-      "Study of 5,200 runners found a 30% spike in single run length increases injury risk by 64%. Weekly total matters less than individual session spikes.",
-  },
-  injury_volume: {
-    label: "Nielsen et al., J Orthop Sports Phys Ther, 2014",
-    url: "https://www.jospt.org/doi/10.2519/jospt.2014.5164",
-    summary:
-      "Research on training volume progression and running-related injury risk in recreational runners.",
-  },
-  injury_training_volume: {
-    label: "Videbaek et al., Sports Med, PMC, 2020",
-    url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7496388/",
-    summary:
-      "Training volume and longest endurance run are both related to half marathon performance and injury rates.",
-  },
-  injury_systematic_review: {
-    label: "Damsted et al., Sports Med, PMC, 2022",
-    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC9528699/",
-    summary:
-      "Systematic review on training parameters and injury. The 10% weekly rule is not scientifically justified. Single session spikes are the real risk.",
-  },
-  hrv_guided_training: {
-    label: "Kiviniemi et al., Eur J Appl Physiol, 2007",
-    url: "https://pubmed.ncbi.nlm.nih.gov/17849143/",
-    summary:
-      "HRV-guided training produced significantly larger improvements in maximum running speed than coach-designed fixed plans.",
-  },
-  hrv_meta_analysis: {
-    label: "Javaloyes et al., PMC, 2021",
-    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC8507742/",
-    summary:
-      "Meta-analysis confirms HRV-guided training is superior to predefined training for improving cardiac-vagal modulation and aerobic fitness.",
-  },
-  hrv_monitoring: {
-    label: "Esco et al., Sensors, 2025",
-    url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC12787763/",
-    summary:
-      "Daily HRV monitoring using RMSSD is recommended for optimizing recovery and training adaptations. Weekly averages are more useful than single readings.",
-  },
-  hrv_elite: {
-    label: "Plews et al., Sports Med, 2013",
-    url: "https://pubmed.ncbi.nlm.nih.gov/23852425/",
-    summary:
-      "How HRV responds to training loads in elite endurance athletes and how to use it as a day-to-day monitoring tool.",
-  },
-  sleep_performance: {
-    label: "Vitale et al., Int J Sports Med, 2019",
-    url: "https://pubmed.ncbi.nlm.nih.gov/31288293/",
-    summary:
-      "Sleep hygiene recommendations for optimizing recovery in athletes. Sleep restriction impairs both performance and recovery.",
-  },
-  sleep_deprivation_running: {
-    label: "Daaloul et al., PMC, 2021",
-    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC8076583/",
-    summary:
-      "Partial sleep deprivation decreases 3km time trial performance by 4% and impairs metabolic recovery between training sessions.",
-  },
-  sleep_comprehensive: {
-    label: "Kunath et al., J Clin Med, 2025",
-    url: "https://www.mdpi.com/2077-0383/14/21/7606",
-    summary:
-      "Comprehensive review on sleep and athletic performance covering physiological, molecular, and epigenetic mechanisms.",
-  },
-  marathon_training_volume: {
-    label: "DeJong Lempke et al., Sports Med, 2025",
-    url: "https://doi.org/10.1007/s40279-025-02304-4",
-    summary:
-      "Study of 900+ Boston Marathon runners found training volume and frequency changes are associated with race performance.",
-  },
-  marathon_plans_analysis: {
-    label: "Knopp et al., Sports Med Open, 2024",
-    url: "https://link.springer.com/article/10.1186/s40798-024-00717-5",
-    summary:
-      "Quantitative analysis of 92 sub-elite marathon training plans showing pyramidal intensity distribution in most real-world successful programs.",
-  },
-  default: {
-    label: "80/20 Endurance Research Overview",
-    url: "https://www.8020endurance.com/seilers-hierarchy-of-endurance-training-needs/",
-    summary:
-      "Overview of Seiler's hierarchy of endurance training needs - the foundational framework behind modern polarized training.",
-  },
-  periodization: {
-    label: "Bompa & Buzzichelli, Periodization of Strength, 2015",
-    url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4371881/",
-    summary:
-      "Periodized training produces 25% greater performance gains than non-periodized approaches in endurance athletes.",
-  },
-  taper_science: {
+  taper: {
     label: "Mujika & Padilla, Med Sci Sports Exerc, 2003",
     url: "https://pubmed.ncbi.nlm.nih.gov/12618582/",
     summary:
-      "2-3 week exponential taper reducing volume by 60% while maintaining intensity produces optimal race day performance.",
+      "2-3 week taper reducing volume by 60% while maintaining intensity produces optimal race day performance.",
   },
-  lydiard_periodization: {
-    label: "Lydiard, foundational periodization methodology",
-    url: "https://www.worldathletics.org/be-active/training/lydiard-method",
+  hrv_guided: {
+    label: "Kiviniemi et al., Eur J Appl Physiol, 2007",
+    url: "https://pubmed.ncbi.nlm.nih.gov/17849143/",
     summary:
-      "Lydiard base-strength-anaerobic-coordination sequence: the foundational periodization model used by coaches worldwide.",
+      "HRV-guided training produced significantly larger improvements in running speed than fixed training plans.",
   },
-  mcmillan_zones: {
-    label: "McMillan Running, pace zone methodology",
-    url: "https://www.mcmillanrunning.com/mcmillan-running-calculator/",
+  injury_spike: {
+    label: "Frandsen et al., Br J Sports Med, 2025",
+    url: "https://bjsm.bmj.com/content/59/17/1203",
     summary:
-      "McMillan pace zones derived from comfortable training pace when no race result is available.",
+      "Study of 5,200 runners: a 30% spike in a single run length increases injury risk by 64%.",
+  },
+  strength_injury: {
+    label: "Lauersen et al., Br J Sports Med, 2014",
+    url: "https://pubmed.ncbi.nlm.nih.gov/23914909/",
+    summary:
+      "Strength training reduces sports injury risk by up to 66% and overuse injuries by 50% across 7,738 participants.",
+  },
+  progressive_overload: {
+    label: "Gabbett, Br J Sports Med, 2016",
+    url: "https://pubmed.ncbi.nlm.nih.gov/27539279/",
+    summary:
+      "Training load spikes above 10% per week significantly increase injury risk across multiple sports.",
+  },
+  vdot: {
+    label: "Daniels & Gilbert, Med Sci Sports, 1979",
+    url: "https://pubmed.ncbi.nlm.nih.gov/469800/",
+    summary:
+      "The VDOT system derives personalized training paces from race performance, accounting for VO2max and running economy.",
+  },
+  lactate_threshold: {
+    label: "Esteve-Lanao et al., Med Sci Sports Exerc, 2007",
+    url: "https://pubmed.ncbi.nlm.nih.gov/17468580/",
+    summary:
+      "Intensity distribution directly relates to race performance. Higher easy volume predicts better race outcomes.",
+  },
+  sleep_performance: {
+    label: "Daaloul et al., PMC, 2021",
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC8076583/",
+    summary:
+      "Partial sleep deprivation decreases 3km time trial performance by 4% and impairs metabolic recovery.",
+  },
+  hrv_monitoring: {
+    label: "Plews et al., Sports Med, 2013",
+    url: "https://pubmed.ncbi.nlm.nih.gov/23852425/",
+    summary:
+      "HRV responds predictably to training loads in endurance athletes and is a reliable day-to-day monitoring tool.",
+  },
+  long_run: {
+    label: "Videbaek et al., Sports Med, PMC, 2020",
+    url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7496388/",
+    summary:
+      "Training volume and longest run are the two strongest predictors of half marathon performance.",
+  },
+  masters_recovery: {
+    label: "Tanaka & Seals, J Physiol, 2008",
+    url: "https://pubmed.ncbi.nlm.nih.gov/17303676/",
+    summary:
+      "Endurance performance declines 6-9% per decade after 35 but masters athletes maintain high fitness with appropriate adjustments.",
+  },
+  female_performance: {
+    label: "Engseth et al., J Appl Physiol, 2025",
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11971592/",
+    summary:
+      "Menstrual cycle phase affects running economy during high-intensity sessions. Individual variation is significant.",
+  },
+  postpartum: {
+    label: "Deering et al., BJSM, 2024, Postpartum return to running consensus",
+    url: "https://bjsm.bmj.com/content/58/6/326",
+    summary:
+      "2024 international consensus: strength training essential before return to running postpartum. Minimum 12 weeks before impact exercise.",
   },
   karvonen_hr: {
     label: "Karvonen et al., Ann Med Exp Biol Fenn, 1957",
@@ -164,7 +120,37 @@ export const RESEARCH_SOURCES = {
     label: "Tanaka et al., J Am Coll Cardiol, 2001",
     url: "https://pubmed.ncbi.nlm.nih.gov/11153730/",
     summary:
-      "Age-predicted max HR formula 208 minus 0.7 times age, more accurate than the older 220-age formula.",
+      "Age-predicted max HR: 208 minus 0.7 times age. More accurate than the older 220-age formula.",
+  },
+  injury_prevention_review: {
+    label: "Linton et al., Translational Sports Medicine, 2025",
+    url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11986186/",
+    summary:
+      "Scoping review of 106 running injury prevention studies. Supervision and support are critical for better outcomes.",
+  },
+  runner_types: {
+    label: "Janssen et al., PMC, 2020",
+    url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7177805/",
+    summary:
+      "Four distinct recreational runner types: casual, social, competitive, and devoted. Each needs different coaching approaches.",
+  },
+  mental_health_running: {
+    label: "Oswald et al., Int J Environ Res Public Health, 2020",
+    url: "https://pubmed.ncbi.nlm.nih.gov/33080751/",
+    summary:
+      "Running has significant positive effects on depression and anxiety in a scoping review of the evidence.",
+  },
+  cadence_knee: {
+    label: "Schubert et al., Int J Sports Phys Ther, 2014",
+    url: "https://pubmed.ncbi.nlm.nih.gov/25110607/",
+    summary:
+      "Increasing running cadence by 5-10% reduces knee joint loading and patellofemoral stress.",
+  },
+  nordic_hamstring: {
+    label: "Petersen et al., Am J Sports Med, 2011",
+    url: "https://pubmed.ncbi.nlm.nih.gov/21825112/",
+    summary:
+      "Nordic hamstring protocol reduces hamstring injury recurrence by 51%.",
   },
 } as const satisfies Record<string, ResearchSource>;
 
@@ -185,12 +171,12 @@ function resolveSourceKeys(approachName: string): {
 } {
   const name = approachName.toLowerCase();
 
-  if (name.includes("80/20") || name.includes("base")) {
-    return { primary: "80/20", additional: [] };
+  if (name.includes("80/20") || name.includes("80-20") || name.includes("base")) {
+    return { primary: "80_20", additional: ["long_run"] };
   }
 
   if (name.includes("polarized")) {
-    return { primary: "polarized", additional: ["polarized_recreational"] };
+    return { primary: "polarized", additional: ["80_20"] };
   }
 
   if (
@@ -198,10 +184,10 @@ function resolveSourceKeys(approachName: string): {
     name.includes("pfitz") ||
     name.includes("tempo")
   ) {
-    return { primary: "threshold", additional: ["lactate_threshold"] };
+    return { primary: "lactate_threshold", additional: ["vdot"] };
   }
 
-  return { primary: "default", additional: [] };
+  return { primary: "80_20", additional: ["progressive_overload"] };
 }
 
 export function attachResearchSources(plan: TrainingPlan): TrainingPlan {
@@ -215,7 +201,7 @@ export function attachResearchSources(plan: TrainingPlan): TrainingPlan {
     name: plan.planApproach.name,
     reasoning: plan.planApproach.reasoning,
     primarySource: toSource(primary),
-    injurySource: toSource("injury_single_run"),
+    injurySource: toSource("injury_spike"),
     additionalSources: additional.map((key) => toSource(key)),
   };
 
@@ -255,14 +241,39 @@ State the current phase in keyFocus. Explain briefly why the week looks the way 
 Never prescribe intervals or tempo in base phase.
 Never increase volume in taper phase.`;
 
-export function buildSystemPrompt(units: Units, trainingPhase?: TrainingPhase): string {
+export function buildSystemPrompt(
+  units: Units,
+  trainingPhase?: TrainingPhase,
+  athleteProfile?: UserProfile
+): string {
   const unitLabel = units === "mi" ? "miles" : "kilometers";
   const paceFormat = units === "mi" ? "X:XX/mi" : "X:XX/km";
   const phaseNote = trainingPhase
     ? `\nThe athlete is currently in ${trainingPhase.toUpperCase()} phase. Apply phase rules strictly.`
     : "";
 
-  return `${SYSTEM_PROMPT_BASE}${phaseNote}
+  let profileSections = "";
+  try {
+    profileSections = buildProfileConditionalPrompt(athleteProfile);
+  } catch {
+    profileSections = "";
+  }
+
+  return `${SYSTEM_PROMPT_BASE}
+
+${PACE_RULES}
+
+${VOLUME_INTENSITY_RULES}
+
+${WEEKLY_STRUCTURE_RULES}
+
+${CROSS_TRAINING_RULES}
+
+${PROGRESSIVE_OVERLOAD_RULES}
+
+${MENTAL_HEALTH_RULES}
+
+${WARNING_FLAGS_RULES}${profileSections}${phaseNote}
 
 Never mix units. If the athlete uses miles, every pace and distance in your response must be in miles. Never show /km to a miles user or /mi to a km user.
 
@@ -287,6 +298,7 @@ export function buildCoachUserPrompt(params: {
   units: Units;
   athleteProfile?: UserProfile;
   recentRacePrompt?: string;
+  injuryPromptSection?: string;
 }): string {
   const {
     runSummary,
@@ -304,6 +316,7 @@ export function buildCoachUserPrompt(params: {
     units,
     athleteProfile,
     recentRacePrompt,
+    injuryPromptSection,
   } = params;
 
   const unitLabel = units === "mi" ? "miles" : "kilometers";
@@ -337,11 +350,17 @@ ${recentRacePrompt}
 `
     : "";
 
+  const injuryBlock = injuryPromptSection
+    ? `
+${injuryPromptSection}
+`
+    : "";
+
   return `Create a personalized weekly training plan based on this athlete's recent run data.
 
 RECENT RUN DATA:
 ${runSummary}
-${zonesBlock}${profileBlock}${recentRaceBlock}
+${zonesBlock}${profileBlock}${recentRaceBlock}${injuryBlock}
 ATHLETE GOALS:
 - Race date: ${raceDate ?? "Not specified"}
 - Goal finish time: ${goalTime ?? "Not specified"}
@@ -453,8 +472,8 @@ export function parseTrainingPlanResponse(
       ? {
           name: parsed.planApproach.name,
           reasoning: parsed.planApproach.reasoning,
-          primarySource: toSource("default"),
-          injurySource: toSource("injury_single_run"),
+          primarySource: toSource("80_20"),
+          injurySource: toSource("injury_spike"),
           additionalSources: [],
         }
       : undefined,
@@ -482,7 +501,8 @@ export function parseCheckInResponse(raw: string): {
 async function callClaude(
   userPrompt: string,
   units: Units,
-  trainingPhase?: TrainingPhase
+  trainingPhase?: TrainingPhase,
+  athleteProfile?: UserProfile
 ): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -493,7 +513,7 @@ async function callClaude(
   const response = await client.messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 4096,
-    system: buildSystemPrompt(units, trainingPhase),
+    system: buildSystemPrompt(units, trainingPhase, athleteProfile),
     messages: [{ role: "user", content: userPrompt }],
   });
 
@@ -508,12 +528,13 @@ export async function generateTrainingPlan(
   userPrompt: string,
   units: Units = "km",
   weeksToRace?: number,
-  trainingPhase?: TrainingPhase
+  trainingPhase?: TrainingPhase,
+  athleteProfile?: UserProfile
 ): Promise<TrainingPlan> {
   const phase =
     trainingPhase ??
     (weeksToRace !== undefined ? computeTrainingPhase(weeksToRace) : undefined);
-  const text = await callClaude(userPrompt, units, phase);
+  const text = await callClaude(userPrompt, units, phase, athleteProfile);
   return parseTrainingPlanResponse(text, weeksToRace);
 }
 
